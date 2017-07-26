@@ -1,0 +1,1 @@
+include ':app', ':lib', ':lib-compiler', ':lib-annotation', ':test_module'
