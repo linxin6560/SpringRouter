@@ -1,9 +1,10 @@
 package com.levylin.springrouter.lib;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.levylin.springrouter.lib.annotation.Constants;
-import com.levylin.springrouter.lib.annotation.RouterInfo;
+import com.levylin.springrouter.lib.annotation.MethodInfo;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
@@ -23,22 +24,33 @@ import dalvik.system.DexFile;
  */
 public class SpringRouter {
 
+    private static final String TAG = SpringRouter.class.getSimpleName();
     private static final Map<Method, RouterMethod> ROUTER_METHOD_CACHE = new LinkedHashMap<>();
+    private static Map<Class<?>, InvocationHandler> mInvocationHandlerMap = new HashMap<>();
 
     @SuppressWarnings("unchecked")
     public static <T> T create(final Class<T> router) {
-        return (T) Proxy.newProxyInstance(router.getClassLoader(), new Class<?>[]{router},
-                new InvocationHandler() {
+        InvocationHandler handler = mInvocationHandlerMap.get(router);
+        if (handler == null) {
+            handler = new InvocationHandler() {
 
-                    @Override
-                    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                        if (method.getDeclaringClass() == Object.class) {
-                            return method.invoke(this, args);
-                        }
-                        RouterMethod routerMethod = loadRouterMethod(router, method);
-                        return routerMethod.invoke(args);
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return method.invoke(this, args);
                     }
-                });
+                    RouterMethod routerMethod = loadRouterMethod(router, method);
+                    try {
+                        return routerMethod.invoke(args);
+                    } catch (Throwable throwable) {
+                        throwable.printStackTrace();
+                    }
+                    return null;
+                }
+            };
+            mInvocationHandlerMap.put(router, handler);
+        }
+        return (T) Proxy.newProxyInstance(router.getClassLoader(), new Class<?>[]{router}, handler);
     }
 
     private static RouterMethod loadRouterMethod(Class<?> router, Method method) {
@@ -62,14 +74,14 @@ public class SpringRouter {
                 Class clazz = Class.forName(aClass);
                 Method method = clazz.getDeclaredMethod("getRouterMap");
                 method.setAccessible(true);
-                HashMap<String, RouterInfo> map = (HashMap<String, RouterInfo>) method.invoke(null);
+                HashMap<String, MethodInfo> map = (HashMap<String, MethodInfo>) method.invoke(null);
                 RouterMethod.ROUTER_INFO_MAP.putAll(map);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
         long end = System.currentTimeMillis();
-        System.out.println("耗时：" + (end - start) + "ms");
+        logE("SpringRouter初始化耗时：" + (end - start) + "ms");
     }
 
     /**
@@ -90,6 +102,10 @@ public class SpringRouter {
             e.printStackTrace();
         }
         return classes;
+    }
+
+    static void logE(String content) {
+        Log.e(TAG, content);
     }
 
 }

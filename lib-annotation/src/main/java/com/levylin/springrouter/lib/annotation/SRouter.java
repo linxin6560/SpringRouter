@@ -6,12 +6,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 方法路径
- * Created by LinXin on 2017/6/5.
+ * Created by LinXin on 2017/7/24.
  */
 @Target(ElementType.METHOD)
-@Retention(RetentionPolicy.SOURCE)
-public @interface SRServerPath {
+@Retention(RetentionPolicy.RUNTIME)
+public @interface SRouter {
 
     String value();
 }

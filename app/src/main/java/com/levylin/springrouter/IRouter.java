@@ -2,7 +2,7 @@ package com.levylin.springrouter;
 
 import android.content.Context;
 
-import com.levylin.springrouter.lib.annotation.SRClientPath;
+import com.levylin.springrouter.lib.annotation.SRouter;
 
 import java.util.HashMap;
 import java.util.List;
@@ -13,15 +13,15 @@ import java.util.List;
 
 public interface IRouter {
 
-    @SRClientPath("test_module://aaa")
+    @SRouter("test_module://aaa")
     void testa(Context context);
 
-    @SRClientPath("test_module://bbb")
+    @SRouter("test_module://bbb")
     void testb(List<String> list);
 
-    @SRClientPath("test://aaa")
+    @SRouter("test://aaa")
     void testc();
 
-    @SRClientPath("test://bbb")
+    @SRouter("test://bbb")
     void testd(Context context, HashMap<String, String> map);
 }

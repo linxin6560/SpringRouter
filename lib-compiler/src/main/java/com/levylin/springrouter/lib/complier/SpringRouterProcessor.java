@@ -2,7 +2,8 @@ package com.levylin.springrouter.lib.complier;
 
 import com.google.auto.service.AutoService;
 import com.levylin.springrouter.lib.annotation.Constants;
-import com.levylin.springrouter.lib.annotation.RouterInfo;
+import com.levylin.springrouter.lib.annotation.MethodInfo;
+import com.levylin.springrouter.lib.annotation.SRouterPath;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
@@ -27,7 +28,6 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
 /**
@@ -35,23 +35,22 @@ import javax.tools.Diagnostic;
  * Created by LinXin on 2017/6/22.
  */
 @AutoService(Processor.class)
-@SupportedAnnotationTypes({"com.levylin.springrouter.lib.annotation.SRServerPath"})
+@SupportedAnnotationTypes({"com.levylin.springrouter.lib.annotation.SRouterPath"})
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 public class SpringRouterProcessor extends AbstractProcessor {
 
+    private static final String ROUTER_NAME = "%s$$Router";
     /**
      * 日志相关的辅助类
      */
     private Messager mMessager;
     private Filer mFiler;
-    private Elements mElements;
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
         mMessager = processingEnv.getMessager();
         mFiler = processingEnv.getFiler();
-        mElements = processingEnv.getElementUtils();
     }
 
     @Override
@@ -62,31 +61,29 @@ public class SpringRouterProcessor extends AbstractProcessor {
         }
         for (TypeElement annotation : annotations) {
             Set<? extends Element> elements = roundEnv.getElementsAnnotatedWith(annotation);
-            HashMap<String, ProcessingMethod> map = new HashMap<>();
-            TypeElement typeElement = null;
+            HashMap<String, HashMap<String, String>> classNameRouterMap = new HashMap<>();//类名和路由的map
+            String className;
             for (Element element : elements) {
                 // 打印
                 ExecutableElement executableElement = (ExecutableElement) element;
-                typeElement = (TypeElement) executableElement.getEnclosingElement();
-                ProcessingMethod method = new ProcessingMethod(executableElement);
-                String path = method.getPath();
-                map.put(path, method);
-            }
-            try {
-                if (typeElement != null) {
-                    makeJavaFile(typeElement, map).writeTo(mFiler);
+                TypeElement typeElement = (TypeElement) element.getEnclosingElement();
+                className = String.format(ROUTER_NAME, typeElement.getSimpleName());
+                String classPath = typeElement.toString();
+                String fullyMethod = classPath + "." + executableElement;
+                info("fullyMethod=" + fullyMethod + ",className=" + className);
+                SRouterPath sRouterPath = element.getAnnotation(SRouterPath.class);
+                String routerPath = sRouterPath.value();
+                HashMap<String, String> tmp = classNameRouterMap.get(className);
+                if (tmp == null) {
+                    tmp = new HashMap<>();
+                    classNameRouterMap.put(className, tmp);
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+                tmp.put(routerPath, fullyMethod);
             }
+            makeJavaFiles(classNameRouterMap);
         }
         return true;
     }
-
-    private String getPackageName(TypeElement type) {
-        return mElements.getPackageOf(type).getQualifiedName().toString();
-    }
-
 
     private void error(String msg, Object... args) {
         mMessager.printMessage(Diagnostic.Kind.ERROR, String.format(msg, args));
@@ -96,42 +93,47 @@ public class SpringRouterProcessor extends AbstractProcessor {
         mMessager.printMessage(Diagnostic.Kind.NOTE, String.format(msg, args));
     }
 
-    private JavaFile makeJavaFile(TypeElement element, HashMap<String, ProcessingMethod> map) {
-        TypeName hashMapType = ParameterizedTypeName.get(HashMap.class, String.class, RouterInfo.class);
+    /**
+     * 生成java类
+     *
+     * @param map
+     */
+    private void makeJavaFiles(HashMap<String, HashMap<String, String>> map) {
+        for (Map.Entry<String, HashMap<String, String>> entry : map.entrySet()) {
+            makeOneJavaFile(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /**
+     * 生成单个java类
+     *
+     * @param className
+     * @param map
+     */
+    private void makeOneJavaFile(String className, HashMap<String, String> map) {
+        TypeName hashMapType = ParameterizedTypeName.get(HashMap.class, String.class, MethodInfo.class);
 
         MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder("getRouterMap")
                 .returns(hashMapType)
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC);
         methodBuilder.addStatement("$T map = new $T<>()", hashMapType, HashMap.class);
-        for (Map.Entry<String, ProcessingMethod> entry : map.entrySet()) {
-            ProcessingMethod method = entry.getValue();
-            String[] typeArray = method.getTypeArray();
-            StringBuilder typeStr = new StringBuilder();
-            for (String s : typeArray) {
-                typeStr.append("\"").append(s).append("\"").append(",");
-            }
-            String type;
-            if (typeStr.length() > 1) {
-                type = typeStr.substring(0, typeStr.length() - 1);
-            } else {
-                type = "";
-            }
-            info("type=" + type);
-            String routerMethod;
-            if (!type.equals("")) {
-                routerMethod = String.format("new RouterInfo(\"%1$s\",\"%2$s\",%3$s)", method.getClassName(), method.getMethodName(), type);
-            } else {
-                routerMethod = String.format("new RouterInfo(\"%1$s\",\"%2$s\")", method.getClassName(), method.getMethodName());
-            }
-            methodBuilder.addCode(String.format("map.put(\"%1$s\",%2$s);\n", entry.getKey(), routerMethod));
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            String routerInfo = String.format("new MethodInfo(\"%1$s\")", entry.getValue());
+            methodBuilder.addCode(String.format("map.put(\"%1$s\",%2$s);\n", entry.getKey(), routerInfo));
         }
         methodBuilder.addCode("return map;\n");
 
 
-        TypeSpec finderClass = TypeSpec.classBuilder(element.getSimpleName() + "$$Router")
+        TypeSpec finderClass = TypeSpec.classBuilder(className)
                 .addModifiers(Modifier.PUBLIC)
                 .addMethod(methodBuilder.build())
                 .build();
-        return JavaFile.builder(Constants.PACKAGE_NAME, finderClass).build();
+        JavaFile file = JavaFile.builder(Constants.PACKAGE_NAME, finderClass).build();
+        try {
+            file.writeTo(mFiler);
+        } catch (IOException e) {
+            e.printStackTrace();
+            error("生成文件失败：" + e.getLocalizedMessage());
+        }
     }
 }

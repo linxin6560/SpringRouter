@@ -9,14 +9,14 @@ import java.util.HashMap;
 /**
  * Created by LinXin on 2017/7/24.
  */
-public class MainRouter {
+public class MainRouter2 {
 
-    @SRouterPath("test://aaa")
+    @SRouterPath("test://ccc")
     public void test() {
-        System.out.println("test://aaa is called");
+        System.out.println("测试serverPath....");
     }
 
-    @SRouterPath("test://bbb")
+    @SRouterPath("test://ddd")
     public void test2(Context context, HashMap<String, String> map) {
         System.out.println("test://bbb is called");
     }

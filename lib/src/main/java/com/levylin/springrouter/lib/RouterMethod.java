@@ -1,12 +1,10 @@
 package com.levylin.springrouter.lib;
 
-import com.levylin.springrouter.lib.annotation.RouterInfo;
-import com.levylin.springrouter.lib.annotation.SRClientPath;
+import com.levylin.springrouter.lib.annotation.MethodInfo;
+import com.levylin.springrouter.lib.annotation.SRouter;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
 import java.util.HashMap;
 
 /**
@@ -15,17 +13,19 @@ import java.util.HashMap;
  */
 class RouterMethod {
 
+    private Method method;
     private final String routerPath;
     private static final HashMap<String, Object> ROUTER_CLASS_MAP = new HashMap<>();
-    static final HashMap<String, RouterInfo> ROUTER_INFO_MAP = new HashMap<>();
+    static final HashMap<String, MethodInfo> ROUTER_INFO_MAP = new HashMap<>();
 
     RouterMethod(Build build) {
         this.routerPath = build.methodPath;
+        this.method = build.method;
     }
 
     public Object invoke(Object[] args) throws Throwable {
         Object target = ROUTER_CLASS_MAP.get(routerPath);
-        RouterInfo info = ROUTER_INFO_MAP.get(routerPath);
+        MethodInfo info = ROUTER_INFO_MAP.get(routerPath);
         if (target == null) {
             String className = info.getClassName();
             Class clazz = Class.forName(className);
@@ -33,12 +33,11 @@ class RouterMethod {
             ROUTER_CLASS_MAP.put(routerPath, target);
         }
         Method targetMethod;
-        if (info.getTypeArray() == null) {
+        if (method.getParameterTypes() == null) {
             targetMethod = target.getClass().getMethod(info.getMethodName());
         } else {
-            targetMethod = target.getClass().getMethod(info.getMethodName(), info.getTypeArray());
+            targetMethod = target.getClass().getMethod(info.getMethodName(), method.getParameterTypes());
         }
-        System.out.println("targetMethod=" + targetMethod);
         return targetMethod.invoke(target, args);
     }
 
@@ -63,8 +62,8 @@ class RouterMethod {
         }
 
         private void parserMethodAnnotation(Annotation annotation) {
-            if (annotation instanceof SRClientPath) {
-                methodPath = ((SRClientPath) annotation).value();
+            if (annotation instanceof SRouter) {
+                methodPath = ((SRouter) annotation).value();
             }
         }
     }
